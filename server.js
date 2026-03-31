@@ -10,7 +10,7 @@ app.use(cors());
 // ==========================
 // 🔐 CONFIG
 // ==========================
-const TOKEN = "EAAKTGz6dC4kBRAch7n7FHREpRVFcArI0YuqYs2ZBioC5ZCZC7PrKyQZCZBFtabZBAcMQC7GydgLvGa7H6bFjOmXm6zeOjEZCe4QZCVD4wurzUtL0I3xxfH94W239VNoZCousN2FPWzLS0szpBLm8NnlaiG1nDXNx4iiFNj7jzrvI2nZAz5YfTJju592yqrBKPM"; // ⚠️ depois vamos mover isso pra variável de ambiente
+const TOKEN = "EAAKTGz6dC4kBRErOZCGoGbIvdp6a5zywWGvzlscz5jMdWD9Ui8fZC7OI7WwL5SbyEGnST7WXazRD1En84xh7B49Ii3gTaz5w1pva6mnY6TBdWT4kJ2mYZB7nZATtoZCC8DxAUT4hj1AUE6Wy3PjfkOipICGW1rEDfqNZCZA4Yo3eA9xBpm5ZCXs875ykKGMy5dMFlnbzYpj4nuaJZC7o5YLmsi0srjVgZCaLPSGcj5eqULr3JRfJQyqBL1kUHmrQRlmnRZBEnBm48zOZBbZBnt1jyYRtkkchO"; // ⚠️ depois vamos mover isso pra variável de ambiente
 const IG_ID = "17841449359330655";
 const BASE_URL = "https://graph.facebook.com/v25.0";
 
