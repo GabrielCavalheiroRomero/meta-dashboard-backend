@@ -7,7 +7,7 @@ const cron = require("node-cron");
 const app = express();
 app.use(cors());
 
-const TOKEN = "EAAKTGz6dC4kBRMKLYoXmock6ihKlLsOsZB5Ob0sfoWRjTrBEwTVVCZAbZAVZBv0M4YHSHz7BJSUa6N6DhJzINw5D2N9MTIB03zmzttyuOwSduq9ZBcMeRkDLbne0bp5l1NI6ntCy9VWU8I50dAqMOnUCJiZC3cc1bFBJLsGfYXuUZCYaNNsmxtDjh6QpZA5WSvkLPUgDHFRmMa5nVh9LiwJZCpVEgDH5jZCJyJFKK5gYDEMTgHxBkLn8dXBj7wOhmBIuzJbqS9qd4sEAVrqXWtI76AQux3BwZDZD";
+const TOKEN = "EAAKTGz6dC4kBRD2rDzZAt95CET4Tji0ZAPqxuGSn9MpkhyBAzUNxqTmSzTo1x5ymtHQqVsf84hs2PJqsCTtlmvXivRQhpwABpHZB4TQg4XX6Jz82Xwz8x2XG9MKOV2xAOKoBC3tA6sGUyKnfTLcozevksTrmIKYQWOMzUzExVjRcbAKcY1CzrNVzBlz";
 const IG_ID = "17841449359330655";
 const BASE_URL = "https://graph.facebook.com/v25.0";
 
