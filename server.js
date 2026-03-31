@@ -7,7 +7,10 @@ const cron = require("node-cron");
 const app = express();
 app.use(cors());
 
-const TOKEN = "EAAKTGz6dC4kBRD2rDzZAt95CET4Tji0ZAPqxuGSn9MpkhyBAzUNxqTmSzTo1x5ymtHQqVsf84hs2PJqsCTtlmvXivRQhpwABpHZB4TQg4XX6Jz82Xwz8x2XG9MKOV2xAOKoBC3tA6sGUyKnfTLcozevksTrmIKYQWOMzUzExVjRcbAKcY1CzrNVzBlz";
+// ==========================
+// 🔐 CONFIG
+// ==========================
+const TOKEN = "EAAKTGz6dC4kBRAch7n7FHREpRVFcArI0YuqYs2ZBioC5ZCZC7PrKyQZCZBFtabZBAcMQC7GydgLvGa7H6bFjOmXm6zeOjEZCe4QZCVD4wurzUtL0I3xxfH94W239VNoZCousN2FPWzLS0szpBLm8NnlaiG1nDXNx4iiFNj7jzrvI2nZAz5YfTJju592yqrBKPM"; // ⚠️ depois vamos mover isso pra variável de ambiente
 const IG_ID = "17841449359330655";
 const BASE_URL = "https://graph.facebook.com/v25.0";
 
@@ -54,8 +57,15 @@ cron.schedule("0 0 * * *", () => {
   saveFollowersHistory();
 });
 
-// roda também ao iniciar
+// roda ao iniciar
 saveFollowersHistory();
+
+// ==========================
+// 🏠 ROTA ROOT (MELHORIA 🔥)
+// ==========================
+app.get("/", (req, res) => {
+  res.send("🚀 API Meta Dashboard rodando com sucesso!");
+});
 
 // ==========================
 // 📊 DAILY (30 dias)
@@ -116,7 +126,7 @@ app.get("/insights/total", async (req, res) => {
 });
 
 // ==========================
-// 📉 FOLLOWERS HISTORY (NOVO 🔥)
+// 📉 FOLLOWERS HISTORY
 // ==========================
 app.get("/insights/followers-history", (req, res) => {
   try {
@@ -167,6 +177,10 @@ app.get("/media", async (req, res) => {
 });
 
 // ==========================
-app.listen(3001, () => {
-  console.log("🚀 Backend rodando em http://localhost:3001");
+// 🚀 START SERVER (FIX RAILWAY)
+// ==========================
+const PORT = process.env.PORT || 3001;
+
+app.listen(PORT, () => {
+  console.log(`🚀 Backend rodando na porta ${PORT}`);
 });
