@@ -208,10 +208,10 @@ app.get("/media", async (req, res) => {
 });
 
 // ==========================
-// 🚀 START SERVER
+// 🚀 START SERVER (RAILWAY FIX FINAL)
 // ==========================
 const PORT = process.env.PORT || 3001;
 
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Backend rodando na porta ${PORT}`);
 });
