@@ -8,7 +8,7 @@ const app = express();
 app.use(cors());
 
 // ==========================
-// 🛡️ PROTEÇÃO GLOBAL (evita crash)
+// 🛡️ PROTEÇÃO GLOBAL
 // ==========================
 process.on("uncaughtException", (err) => {
   console.error("💥 ERRO NÃO TRATADO:", err);
@@ -19,7 +19,7 @@ process.on("unhandledRejection", (err) => {
 });
 
 // ==========================
-// 🔐 CONFIG (ENV)
+// 🔐 CONFIG
 // ==========================
 const TOKEN = process.env.TOKEN;
 const IG_ID = process.env.IG_ID;
@@ -39,6 +39,18 @@ if (!fs.existsSync(HISTORY_FILE)) {
 }
 
 // ==========================
+// 🔄 FUNÇÃO LEITURA SEGURA JSON
+// ==========================
+function readJSONSafe(path) {
+  try {
+    const data = fs.readFileSync(path, "utf-8");
+    return data ? JSON.parse(data) : [];
+  } catch {
+    return [];
+  }
+}
+
+// ==========================
 // 💾 SALVAR FOLLOWERS
 // ==========================
 async function saveFollowersHistory() {
@@ -51,7 +63,7 @@ async function saveFollowersHistory() {
     const followers = response.data.followers_count;
     const today = new Date().toISOString().split("T")[0];
 
-    let history = JSON.parse(fs.readFileSync(HISTORY_FILE));
+    let history = readJSONSafe(HISTORY_FILE);
 
     const alreadyExists = history.find((h) => h.date === today);
 
@@ -69,7 +81,7 @@ async function saveFollowersHistory() {
 }
 
 // ==========================
-// ⏰ CRON (todo dia)
+// ⏰ CRON DIÁRIO
 // ==========================
 cron.schedule("0 0 * * *", () => {
   console.log("⏰ Rodando coleta diária...");
@@ -84,7 +96,7 @@ if (TOKEN && IG_ID) {
 }
 
 // ==========================
-// 🏠 ROTA ROOT (Railway)
+// 🏠 ROTA ROOT
 // ==========================
 app.get("/", (req, res) => {
   res.send("🚀 API Meta Dashboard rodando com sucesso!");
@@ -129,8 +141,9 @@ app.get("/insights/daily", async (req, res) => {
 // ==========================
 app.get("/insights/total", async (req, res) => {
   try {
-    if (!TOKEN || !IG_ID)
+    if (!TOKEN || !IG_ID) {
       return res.json({ profile_views: 0, followers_count: 0 });
+    }
 
     const profileUrl = `${BASE_URL}/${IG_ID}/insights?metric=profile_views&period=day&metric_type=total_value&access_token=${TOKEN}`;
     const followersUrl = `${BASE_URL}/${IG_ID}?fields=followers_count&access_token=${TOKEN}`;
@@ -160,9 +173,9 @@ app.get("/insights/total", async (req, res) => {
 // ==========================
 app.get("/insights/followers-history", (req, res) => {
   try {
-    const history = JSON.parse(fs.readFileSync(HISTORY_FILE));
+    const history = readJSONSafe(HISTORY_FILE);
     res.json(history);
-  } catch (error) {
+  } catch {
     res.json([]);
   }
 });
@@ -208,7 +221,7 @@ app.get("/media", async (req, res) => {
 });
 
 // ==========================
-// 🚀 START SERVER (RAILWAY FIX FINAL)
+// 🚀 START SERVER (RAILWAY)
 // ==========================
 const PORT = process.env.PORT || 3001;
 
