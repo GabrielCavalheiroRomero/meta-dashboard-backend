@@ -196,6 +196,11 @@ app.get("/followers/history", async (req, res) => {
   }
 });
 
+app.get("/test/save-followers", async (req, res) => {
+  await saveFollowersHistory();
+  res.send("Salvou followers!");
+});
+
 /* ================================
    🚀 START SERVER
 ================================ */
