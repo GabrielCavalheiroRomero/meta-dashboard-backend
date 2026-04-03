@@ -1,61 +1,59 @@
 const express = require("express");
 const axios = require("axios");
 const cors = require("cors");
-const fs = require("fs");
 const cron = require("node-cron");
+const { Pool } = require("pg");
 
 const app = express();
 app.use(cors());
 
-// ==========================
-// 🛡️ PROTEÇÃO GLOBAL
-// ==========================
-process.on("uncaughtException", (err) => {
-  console.error("💥 ERRO NÃO TRATADO:", err);
-});
-
-process.on("unhandledRejection", (err) => {
-  console.error("💥 PROMISE ERROR:", err);
-});
-
-// ==========================
-// 🔐 CONFIG
-// ==========================
+/* ================================
+   🔑 ENV VARIABLES
+================================ */
 const TOKEN = process.env.TOKEN;
 const IG_ID = process.env.IG_ID;
-const BASE_URL = "https://graph.facebook.com/v25.0";
+const BASE_URL = "https://graph.facebook.com/v19.0";
 
-if (!TOKEN || !IG_ID) {
-  console.log("⚠️ TOKEN ou IG_ID não definidos!");
-}
+/* ================================
+   🗄️ DATABASE (POSTGRES - RAILWAY)
+================================ */
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false,
+  },
+});
 
-// ==========================
-// 📁 ARQUIVO HISTÓRICO
-// ==========================
-const HISTORY_FILE = "./followers-history.json";
-
-if (!fs.existsSync(HISTORY_FILE)) {
-  fs.writeFileSync(HISTORY_FILE, JSON.stringify([]));
-}
-
-// ==========================
-// 🔄 FUNÇÃO LEITURA SEGURA JSON
-// ==========================
-function readJSONSafe(path) {
+/* ================================
+   📦 INIT DATABASE
+================================ */
+async function initDB() {
   try {
-    const data = fs.readFileSync(path, "utf-8");
-    return data ? JSON.parse(data) : [];
-  } catch {
-    return [];
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS followers_history (
+        id SERIAL PRIMARY KEY,
+        date DATE UNIQUE,
+        followers INT
+      )
+    `);
+
+    console.log("✅ Banco conectado e tabela pronta");
+  } catch (error) {
+    console.log("❌ ERRO DB:", error.message);
   }
 }
 
-// ==========================
-// 💾 SALVAR FOLLOWERS
-// ==========================
+initDB();
+
+/* ================================
+   💾 SAVE FOLLOWERS
+================================ */
 async function saveFollowersHistory() {
   try {
-    if (!TOKEN || !IG_ID) return;
+    if (!TOKEN || !IG_ID) {
+      console.log("⚠️ TOKEN ou IG_ID não definidos!");
+      return;
+    }
 
     const url = `${BASE_URL}/${IG_ID}?fields=followers_count&access_token=${TOKEN}`;
     const response = await axios.get(url);
@@ -63,71 +61,83 @@ async function saveFollowersHistory() {
     const followers = response.data.followers_count;
     const today = new Date().toISOString().split("T")[0];
 
-    let history = readJSONSafe(HISTORY_FILE);
-
-    const alreadyExists = history.find((h) => h.date === today);
-
-    if (!alreadyExists) {
-      history.push({ date: today, followers });
-      fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2));
-      console.log("✅ Followers salvo:", { date: today, followers });
-    }
-  } catch (error) {
-    console.log(
-      "❌ ERRO AO SALVAR FOLLOWERS:",
-      error.response?.data || error.message
+    await pool.query(
+      `
+      INSERT INTO followers_history (date, followers)
+      VALUES ($1, $2)
+      ON CONFLICT (date) DO NOTHING
+      `,
+      [today, followers]
     );
+
+    console.log("✅ Followers salvo no banco:", { date: today, followers });
+
+  } catch (error) {
+    console.log("❌ ERRO AO SALVAR FOLLOWERS:", error.response?.data || error.message);
   }
 }
 
-// ==========================
-// ⏰ CRON DIÁRIO
-// ==========================
-cron.schedule("0 0 * * *", () => {
-  console.log("⏰ Rodando coleta diária...");
-  if (TOKEN && IG_ID) {
-    saveFollowersHistory();
-  }
+/* ================================
+   ⏰ CRON (1x por dia)
+================================ */
+cron.schedule("0 23 * * *", () => {
+  console.log("⏰ Salvando followers automático...");
+  saveFollowersHistory();
 });
 
-// roda ao iniciar
-if (TOKEN && IG_ID) {
-  saveFollowersHistory();
-}
+/* ================================
+   🚀 ROTAS
+================================ */
 
-// ==========================
-// 🏠 ROTA ROOT
-// ==========================
+// ROOT
 app.get("/", (req, res) => {
   res.send("🚀 API Meta Dashboard rodando com sucesso!");
 });
 
-// ==========================
-// 📊 INSIGHTS DAILY (30 dias)
-// ==========================
+/* ================================
+   📊 TOTAL
+================================ */
+app.get("/insights/total", async (req, res) => {
+  try {
+    const profileUrl = `${BASE_URL}/${IG_ID}/insights?metric=profile_views&period=day&metric_type=total_value&access_token=${TOKEN}`;
+    const followersUrl = `${BASE_URL}/${IG_ID}?fields=followers_count&access_token=${TOKEN}`;
+
+    const [profileRes, followersRes] = await Promise.all([
+      axios.get(profileUrl),
+      axios.get(followersUrl),
+    ]);
+
+    res.json({
+      profile_views: profileRes.data.data?.[0]?.values?.[0]?.value || 0,
+      followers_count: followersRes.data.followers_count || 0,
+    });
+
+  } catch (error) {
+    console.log("❌ TOTAL ERROR:", error.response?.data || error.message);
+    res.json({ profile_views: 0, followers_count: 0 });
+  }
+});
+
+/* ================================
+   📈 DAILY
+================================ */
 app.get("/insights/daily", async (req, res) => {
   try {
-    if (!TOKEN || !IG_ID) return res.json([]);
-
     const since = new Date();
     since.setDate(since.getDate() - 30);
 
     const sinceStr = since.toISOString().split("T")[0];
     const untilStr = new Date().toISOString().split("T")[0];
 
-    const url = `${BASE_URL}/${IG_ID}/insights?metric=reach,impressions,profile_views&period=day&since=${sinceStr}&until=${untilStr}&access_token=${TOKEN}`;
+    const url = `${BASE_URL}/${IG_ID}/insights?metric=reach&period=day&since=${sinceStr}&until=${untilStr}&access_token=${TOKEN}`;
 
     const response = await axios.get(url);
 
     const reach = response.data.data.find(m => m.name === "reach");
-    const impressions = response.data.data.find(m => m.name === "impressions");
-    const profileViews = response.data.data.find(m => m.name === "profile_views");
 
-    const result = reach.values.map((_, i) => ({
-      date: reach.values[i].end_time.split("T")[0],
-      reach: reach.values[i]?.value || 0,
-      impressions: impressions?.values[i]?.value || 0,
-      profile_views: profileViews?.values[i]?.value || 0
+    const result = reach.values.map(item => ({
+      date: item.end_time.split("T")[0],
+      reach: item.value
     }));
 
     res.json(result);
@@ -138,104 +148,62 @@ app.get("/insights/daily", async (req, res) => {
   }
 });
 
-// ==========================
-// 📈 INSIGHTS TOTAL
-// ==========================
-app.get("/insights/total", async (req, res) => {
-  try {
-    if (!TOKEN || !IG_ID) {
-      return res.json({ profile_views: 0, followers_count: 0 });
-    }
-
-    const profileUrl = `${BASE_URL}/${IG_ID}/insights?metric=profile_views&period=day&metric_type=total_value&access_token=${TOKEN}`;
-    const followersUrl = `${BASE_URL}/${IG_ID}?fields=followers_count&access_token=${TOKEN}`;
-
-    const [profileRes, followersRes] = await Promise.all([
-      axios.get(profileUrl),
-      axios.get(followersUrl),
-    ]);
-
-    res.json({
-      profile_views:
-        profileRes.data?.data?.[0]?.total_value?.value ?? 0,
-      followers_count: followersRes.data?.followers_count ?? 0,
-    });
-  } catch (error) {
-    console.log("❌ TOTAL ERROR:", error.response?.data || error.message);
-
-    res.json({
-      profile_views: 0,
-      followers_count: 0,
-    });
-  }
-});
-
-// ==========================
-// 📉 FOLLOWERS HISTORY
-// ==========================
-app.get("/insights/followers-history", (req, res) => {
-  try {
-    const history = readJSONSafe(HISTORY_FILE);
-    res.json(history);
-  } catch {
-    res.json([]);
-  }
-});
-
-// ==========================
-// 📱 MEDIA + REACH
-// ==========================
+/* ================================
+   📸 MEDIA
+================================ */
 app.get("/media", async (req, res) => {
   try {
-    if (!TOKEN || !IG_ID) return res.json([]);
-
-    const url = `${BASE_URL}/${IG_ID}/media?fields=id,caption,media_type,media_url,thumbnail_url,like_count,comments_count,timestamp&limit=25&access_token=${TOKEN}`;
+    const url = `${BASE_URL}/${IG_ID}/media?fields=id,caption,media_type,media_url,thumbnail_url,like_count,comments_count,timestamp&access_token=${TOKEN}`;
 
     const response = await axios.get(url);
 
-    const media = await Promise.all(
-      response.data.data.map(async (item) => {
+    const mediaData = await Promise.all(
+      response.data.data.map(async (post) => {
         try {
-          const insightsUrl = `${BASE_URL}/${item.id}/insights?metric=reach&access_token=${TOKEN}`;
+          const insightsUrl = `${BASE_URL}/${post.id}/insights?metric=reach&access_token=${TOKEN}`;
           const insightsRes = await axios.get(insightsUrl);
 
-          const reach =
-            insightsRes.data.data?.[0]?.values?.[0]?.value ?? 0;
-
           return {
-            ...item,
-            reach,
+            ...post,
+            reach: insightsRes.data.data?.[0]?.values?.[0]?.value || 0
           };
         } catch {
-          return {
-            ...item,
-            reach: 0,
-          };
+          return { ...post, reach: 0 };
         }
       })
     );
 
-    res.json(media);
+    res.json(mediaData);
+
   } catch (error) {
     console.log("❌ MEDIA ERROR:", error.response?.data || error.message);
     res.json([]);
   }
 });
 
-app.get("/followers/history", (req, res) => {
+/* ================================
+   📊 FOLLOWERS HISTORY (BANCO)
+================================ */
+app.get("/followers/history", async (req, res) => {
   try {
-    const data = fs.readFileSync(FOLLOWERS_FILE, "utf-8");
-    res.json(JSON.parse(data));
-  } catch {
+    const result = await pool.query(
+      "SELECT * FROM followers_history ORDER BY date ASC"
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.log("❌ HISTORY ERROR:", error.message);
     res.json([]);
   }
 });
 
-// ==========================
-// 🚀 START SERVER (RAILWAY)
-// ==========================
+/* ================================
+   🚀 START SERVER
+================================ */
 const PORT = process.env.PORT || 3001;
 
-app.listen(PORT, "0.0.0.0", () => {
+app.listen(PORT, "0.0.0.0", async () => {
   console.log(`🚀 Backend rodando na porta ${PORT}`);
+
+  // salva ao iniciar
+  await saveFollowersHistory();
 });
