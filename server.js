@@ -78,7 +78,7 @@ async function saveFollowersHistory() {
 }
 
 /* ================================
-   ⏰ CRON (1x por dia)
+   ⏰ CRON (1x por dia - 23:00)
 ================================ */
 cron.schedule("0 23 * * *", () => {
   console.log("⏰ Salvando followers automático...");
@@ -119,7 +119,7 @@ app.get("/insights/total", async (req, res) => {
 });
 
 /* ================================
-   📈 DAILY
+   📈 DAILY (REACH)
 ================================ */
 app.get("/insights/daily", async (req, res) => {
   try {
@@ -149,7 +149,7 @@ app.get("/insights/daily", async (req, res) => {
 });
 
 /* ================================
-   📸 MEDIA
+   📸 MEDIA (POSTS)
 ================================ */
 app.get("/media", async (req, res) => {
   try {
@@ -182,23 +182,32 @@ app.get("/media", async (req, res) => {
 });
 
 /* ================================
-   📊 FOLLOWERS HISTORY (BANCO)
+   📊 FOLLOWERS HISTORY (FORMATADO NO SQL)
 ================================ */
 app.get("/followers/history", async (req, res) => {
   try {
-    const result = await pool.query(
-      "SELECT * FROM followers_history ORDER BY date ASC"
-    );
+    const result = await pool.query(`
+      SELECT 
+        TO_CHAR(date, 'YYYY-MM-DD') AS date,
+        followers
+      FROM followers_history
+      ORDER BY date ASC
+    `);
+
     res.json(result.rows);
+
   } catch (error) {
     console.log("❌ HISTORY ERROR:", error.message);
     res.json([]);
   }
 });
 
+/* ================================
+   🧪 ROTA TESTE (OPCIONAL)
+================================ */
 app.get("/test/save-followers", async (req, res) => {
   await saveFollowersHistory();
-  res.send("Salvou followers!");
+  res.send("Followers salvo!");
 });
 
 /* ================================
