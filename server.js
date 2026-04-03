@@ -115,21 +115,23 @@ app.get("/insights/daily", async (req, res) => {
     const sinceStr = since.toISOString().split("T")[0];
     const untilStr = new Date().toISOString().split("T")[0];
 
-    const url = `${BASE_URL}/${IG_ID}/insights?metric=reach&period=day&since=${sinceStr}&until=${untilStr}&access_token=${TOKEN}`;
+    const url = `${BASE_URL}/${IG_ID}/insights?metric=reach,impressions,profile_views&period=day&since=${sinceStr}&until=${untilStr}&access_token=${TOKEN}`;
 
     const response = await axios.get(url);
 
-    const reachData = response.data.data.find(
-      (m) => m.name === "reach"
-    );
+    const reach = response.data.data.find(m => m.name === "reach");
+    const impressions = response.data.data.find(m => m.name === "impressions");
+    const profileViews = response.data.data.find(m => m.name === "profile_views");
 
-    const result =
-      reachData?.values?.map((v) => ({
-        date: v.end_time.split("T")[0],
-        reach: v.value,
-      })) || [];
+    const result = reach.values.map((_, i) => ({
+      date: reach.values[i].end_time.split("T")[0],
+      reach: reach.values[i]?.value || 0,
+      impressions: impressions?.values[i]?.value || 0,
+      profile_views: profileViews?.values[i]?.value || 0
+    }));
 
     res.json(result);
+
   } catch (error) {
     console.log("❌ DAILY ERROR:", error.response?.data || error.message);
     res.json([]);
@@ -216,6 +218,15 @@ app.get("/media", async (req, res) => {
     res.json(media);
   } catch (error) {
     console.log("❌ MEDIA ERROR:", error.response?.data || error.message);
+    res.json([]);
+  }
+});
+
+app.get("/followers/history", (req, res) => {
+  try {
+    const data = fs.readFileSync(FOLLOWERS_FILE, "utf-8");
+    res.json(JSON.parse(data));
+  } catch {
     res.json([]);
   }
 });
