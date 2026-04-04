@@ -99,7 +99,8 @@ app.get("/", (req, res) => {
 ================================ */
 app.get("/insights/total", async (req, res) => {
   try {
-    const until = Math.floor(Date.now() / 1000);
+    // Pega o dia anterior onde os dados já estão consolidados
+    const until = Math.floor(Date.now() / 1000) - 86400;
     const since = until - 86400;
 
     const profileUrl = `${BASE_URL}/${IG_ID}/insights?metric=profile_views&period=day&metric_type=total_value&since=${since}&until=${until}&access_token=${TOKEN}`;
@@ -109,8 +110,6 @@ app.get("/insights/total", async (req, res) => {
       axios.get(profileUrl),
       axios.get(followersUrl),
     ]);
-
-    console.log("📊 Profile API response:", JSON.stringify(profileRes.data));
 
     const profileViews = profileRes.data.data?.[0]?.total_value?.value ?? 0;
 
