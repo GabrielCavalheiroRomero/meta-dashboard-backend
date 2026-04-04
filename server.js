@@ -99,7 +99,10 @@ app.get("/", (req, res) => {
 ================================ */
 app.get("/insights/total", async (req, res) => {
   try {
-    const profileUrl = `${BASE_URL}/${IG_ID}/insights?metric=profile_views&period=day&metric_type=total_value&access_token=${TOKEN}`;
+    const since = Math.floor(Date.now() / 1000) - 86400;
+    const until = Math.floor(Date.now() / 1000);
+
+    const profileUrl = `${BASE_URL}/${IG_ID}/insights?metric=profile_views&period=day&metric_type=total_value&since=${since}&until=${until}&access_token=${TOKEN}`;
     const followersUrl = `${BASE_URL}/${IG_ID}?fields=followers_count&access_token=${TOKEN}`;
 
     const [profileRes, followersRes] = await Promise.all([
@@ -107,8 +110,10 @@ app.get("/insights/total", async (req, res) => {
       axios.get(followersUrl),
     ]);
 
+    const profileViews = profileRes.data.data?.[0]?.total_value?.value ?? 0;
+
     res.json({
-      profile_views: profileRes.data.data?.[0]?.values?.[0]?.value || 0,
+      profile_views: profileViews,
       followers_count: followersRes.data.followers_count || 0,
     });
 
