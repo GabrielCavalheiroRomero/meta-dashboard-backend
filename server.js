@@ -99,28 +99,31 @@ app.get("/", (req, res) => {
 ================================ */
 app.get("/insights/total", async (req, res) => {
   try {
-    // Pega o dia anterior onde os dados já estão consolidados
     const until = Math.floor(Date.now() / 1000) - 86400;
     const since = until - 86400;
 
     const profileUrl = `${BASE_URL}/${IG_ID}/insights?metric=profile_views&period=day&metric_type=total_value&since=${since}&until=${until}&access_token=${TOKEN}`;
+    const viewsUrl = `${BASE_URL}/${IG_ID}/insights?metric=views&period=day&metric_type=total_value&access_token=${TOKEN}`;
     const followersUrl = `${BASE_URL}/${IG_ID}?fields=followers_count&access_token=${TOKEN}`;
 
-    const [profileRes, followersRes] = await Promise.all([
+    const [profileRes, viewsRes, followersRes] = await Promise.all([
       axios.get(profileUrl),
+      axios.get(viewsUrl),
       axios.get(followersUrl),
     ]);
 
     const profileViews = profileRes.data.data?.[0]?.total_value?.value ?? 0;
+    const views = viewsRes.data.data?.[0]?.total_value?.value ?? 0;
 
     res.json({
       profile_views: profileViews,
       followers_count: followersRes.data.followers_count || 0,
+      impressions: views,
     });
 
   } catch (error) {
     console.log("❌ TOTAL ERROR:", error.response?.data || error.message);
-    res.json({ profile_views: 0, followers_count: 0 });
+    res.json({ profile_views: 0, followers_count: 0, impressions: 0 });
   }
 });
 
