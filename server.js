@@ -7,24 +7,15 @@ const { Pool } = require("pg");
 const app = express();
 app.use(cors());
 
-/* ================================
-   🔑 ENV VARIABLES
-================================ */
 const TOKEN = process.env.TOKEN;
 const IG_ID = process.env.IG_ID;
 const BASE_URL = "https://graph.facebook.com/v19.0";
 
-/* ================================
-   🗄️ DATABASE (POSTGRES - RAILWAY)
-================================ */
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
 });
 
-/* ================================
-   📦 INIT DATABASE
-================================ */
 async function initDB() {
   try {
     await pool.query(`
@@ -34,7 +25,6 @@ async function initDB() {
         followers INT
       )
     `);
-
     await pool.query(`
       CREATE TABLE IF NOT EXISTS metrics_history (
         id SERIAL PRIMARY KEY,
@@ -44,47 +34,35 @@ async function initDB() {
         impressions INT DEFAULT 0
       )
     `);
-
     console.log("✅ Banco conectado e tabelas prontas");
   } catch (error) {
     console.log("❌ ERRO DB:", error.message);
   }
 }
-
 initDB();
 
-/* ================================
-   💾 SAVE FOLLOWERS
-================================ */
 async function saveFollowersHistory() {
   try {
     if (!TOKEN || !IG_ID) return;
-
     const url = `${BASE_URL}/${IG_ID}?fields=followers_count&access_token=${TOKEN}`;
     const response = await axios.get(url);
     const followers = response.data.followers_count;
     const today = new Date().toISOString().split("T")[0];
-
     await pool.query(
       `INSERT INTO followers_history (date, followers)
        VALUES ($1, $2)
        ON CONFLICT (date) DO UPDATE SET followers = $2`,
       [today, followers]
     );
-
     console.log("✅ Followers salvo:", { date: today, followers });
   } catch (error) {
     console.log("❌ ERRO AO SALVAR FOLLOWERS:", error.response?.data || error.message);
   }
 }
 
-/* ================================
-   💾 SAVE METRICS HISTORY
-================================ */
 async function saveMetricsHistory() {
   try {
     if (!TOKEN || !IG_ID) return;
-
     const until = Math.floor(Date.now() / 1000) - 86400;
     const since = until - 86400;
     const today = new Date().toISOString().split("T")[0];
@@ -105,16 +83,12 @@ async function saveMetricsHistory() {
        ON CONFLICT (date) DO UPDATE SET reach = $2, profile_views = $3, impressions = $4`,
       [today, reach, profileViews, impressions]
     );
-
     console.log("✅ Métricas salvas:", { date: today, reach, profileViews, impressions });
   } catch (error) {
     console.log("❌ ERRO AO SALVAR MÉTRICAS:", error.message);
   }
 }
 
-/* ================================
-   ⏰ CRON (1x por dia - 23:00)
-================================ */
 cron.schedule("0 23 * * *", () => {
   console.log("⏰ Salvando dados automático...");
   saveFollowersHistory();
@@ -135,10 +109,9 @@ app.get("/insights/total", async (req, res) => {
   try {
     const until = Math.floor(Date.now() / 1000) - 86400;
     const since = until - 86400;
-
-    const profileUrl  = `${BASE_URL}/${IG_ID}/insights?metric=profile_views&period=day&metric_type=total_value&since=${since}&until=${until}&access_token=${TOKEN}`;
-    const viewsUrl    = `${BASE_URL}/${IG_ID}/insights?metric=views&period=day&metric_type=total_value&access_token=${TOKEN}`;
-    const followersUrl = `${BASE_URL}/${IG_ID}?fields=followers_count&access_token=${TOKEN}`;
+    const profileUrl   = `${BASE_URL}/${IG_ID}/insights?metric=profile_views&period=day&metric_type=total_value&since=${since}&until=${until}&access_token=${TOKEN}`;
+    const viewsUrl     = `${BASE_URL}/${IG_ID}/insights?metric=views&period=day&metric_type=total_value&access_token=${TOKEN}`;
+    const followersUrl = `${BASE_URL}/${IG_ID}?fields=followers_count,username&access_token=${TOKEN}`;
 
     const [profileRes, viewsRes, followersRes] = await Promise.all([
       axios.get(profileUrl),
@@ -146,22 +119,20 @@ app.get("/insights/total", async (req, res) => {
       axios.get(followersUrl),
     ]);
 
-    const profileViews = profileRes.data.data?.[0]?.total_value?.value ?? 0;
-    const impressions  = viewsRes.data.data?.[0]?.total_value?.value ?? 0;
-
     res.json({
-      profile_views:  profileViews,
+      profile_views:   profileRes.data.data?.[0]?.total_value?.value ?? 0,
       followers_count: followersRes.data.followers_count || 0,
-      impressions,
+      impressions:     viewsRes.data.data?.[0]?.total_value?.value ?? 0,
+      username:        followersRes.data.username || "",
     });
   } catch (error) {
     console.log("❌ TOTAL ERROR:", error.response?.data || error.message);
-    res.json({ profile_views: 0, followers_count: 0, impressions: 0 });
+    res.json({ profile_views: 0, followers_count: 0, impressions: 0, username: "" });
   }
 });
 
 /* ================================
-   📈 DAILY (REACH)
+   📈 DAILY (REACH - últimos 30 dias)
 ================================ */
 app.get("/insights/daily", async (req, res) => {
   try {
@@ -187,18 +158,39 @@ app.get("/insights/daily", async (req, res) => {
 });
 
 /* ================================
+   📊 TODAY (DADOS PARCIAIS DO DIA)
+================================ */
+app.get("/insights/today", async (req, res) => {
+  try {
+    const today = new Date().toISOString().split("T")[0];
+    const until = Math.floor(Date.now() / 1000);
+    const since = until - 86400; // últimas 24h
+
+    const [reachRes, viewsRes, followersRes] = await Promise.allSettled([
+      axios.get(`${BASE_URL}/${IG_ID}/insights?metric=reach&period=day&since=${since}&until=${until}&access_token=${TOKEN}`),
+      axios.get(`${BASE_URL}/${IG_ID}/insights?metric=views&period=day&metric_type=total_value&access_token=${TOKEN}`),
+      axios.get(`${BASE_URL}/${IG_ID}?fields=followers_count&access_token=${TOKEN}`),
+    ]);
+
+    const reach       = reachRes.status === "fulfilled"     ? reachRes.value.data.data?.find(m => m.name === "reach")?.values?.slice(-1)[0]?.value ?? 0 : 0;
+    const impressions = viewsRes.status === "fulfilled"     ? viewsRes.value.data.data?.[0]?.total_value?.value ?? 0 : 0;
+    const followers   = followersRes.status === "fulfilled" ? followersRes.value.data.followers_count ?? 0 : 0;
+
+    res.json({ date: today, reach, impressions, followers_count: followers, partial: true });
+  } catch (error) {
+    console.log("❌ TODAY ERROR:", error.response?.data || error.message);
+    res.json({ date: new Date().toISOString().split("T")[0], reach: 0, impressions: 0, followers_count: 0, partial: true });
+  }
+});
+
+/* ================================
    📊 METRICS HISTORY
 ================================ */
 app.get("/metrics/history", async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT
-        TO_CHAR(date, 'YYYY-MM-DD') AS date,
-        reach,
-        profile_views,
-        impressions
-      FROM metrics_history
-      ORDER BY date ASC
+      SELECT TO_CHAR(date, 'YYYY-MM-DD') AS date, reach, profile_views, impressions
+      FROM metrics_history ORDER BY date ASC
     `);
     res.json(result.rows);
   } catch (error) {
@@ -214,19 +206,16 @@ app.get("/media", async (req, res) => {
   try {
     const url = `${BASE_URL}/${IG_ID}/media?fields=id,caption,media_type,media_url,thumbnail_url,like_count,comments_count,timestamp&access_token=${TOKEN}`;
     const response = await axios.get(url);
-
     const mediaData = await Promise.all(
       response.data.data.map(async (post) => {
         try {
-          const insightsUrl = `${BASE_URL}/${post.id}/insights?metric=reach&access_token=${TOKEN}`;
-          const insightsRes = await axios.get(insightsUrl);
+          const insightsRes = await axios.get(`${BASE_URL}/${post.id}/insights?metric=reach&access_token=${TOKEN}`);
           return { ...post, reach: insightsRes.data.data?.[0]?.values?.[0]?.value || 0 };
         } catch {
           return { ...post, reach: 0 };
         }
       })
     );
-
     res.json(mediaData);
   } catch (error) {
     console.log("❌ MEDIA ERROR:", error.response?.data || error.message);
@@ -240,11 +229,8 @@ app.get("/media", async (req, res) => {
 app.get("/followers/history", async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT
-        TO_CHAR(date, 'YYYY-MM-DD') AS date,
-        followers
-      FROM followers_history
-      ORDER BY date ASC
+      SELECT TO_CHAR(date, 'YYYY-MM-DD') AS date, followers
+      FROM followers_history ORDER BY date ASC
     `);
     res.json(result.rows);
   } catch (error) {
@@ -270,7 +256,6 @@ app.get("/test/save-metrics", async (req, res) => {
    🚀 START SERVER
 ================================ */
 const PORT = process.env.PORT || 3001;
-
 app.listen(PORT, "0.0.0.0", async () => {
   console.log(`🚀 Backend rodando na porta ${PORT}`);
   await saveFollowersHistory();
