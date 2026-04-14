@@ -16,6 +16,12 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
+const todayBrasilia = () => {
+  const now = new Date();
+  now.setHours(now.getHours() - 3); // UTC-3
+  return now.toISOString().split("T")[0];
+};
+
 async function initDB() {
   try {
     await pool.query(`
