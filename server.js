@@ -16,9 +16,10 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
+// Data atual no fuso de Brasília (UTC-3)
 const todayBrasilia = () => {
   const now = new Date();
-  now.setHours(now.getHours() - 3); // UTC-3
+  now.setHours(now.getHours() - 3);
   return now.toISOString().split("T")[0];
 };
 
@@ -53,7 +54,7 @@ async function saveFollowersHistory() {
     const url = `${BASE_URL}/${IG_ID}?fields=followers_count&access_token=${TOKEN}`;
     const response = await axios.get(url);
     const followers = response.data.followers_count;
-    const today = new Date().toISOString().split("T")[0];
+    const today = todayBrasilia();
     await pool.query(
       `INSERT INTO followers_history (date, followers)
        VALUES ($1, $2)
@@ -71,7 +72,7 @@ async function saveMetricsHistory() {
     if (!TOKEN || !IG_ID) return;
     const until = Math.floor(Date.now() / 1000) - 86400;
     const since = until - 86400;
-    const today = new Date().toISOString().split("T")[0];
+    const today = todayBrasilia();
 
     const [reachRes, profileRes, viewsRes] = await Promise.allSettled([
       axios.get(`${BASE_URL}/${IG_ID}/insights?metric=reach&period=day&since=${since}&until=${until}&access_token=${TOKEN}`),
@@ -108,9 +109,6 @@ app.get("/", (req, res) => {
   res.send("🚀 API Meta Dashboard rodando com sucesso!");
 });
 
-/* ================================
-   📊 TOTAL
-================================ */
 app.get("/insights/total", async (req, res) => {
   try {
     const until = Math.floor(Date.now() / 1000) - 86400;
@@ -137,9 +135,6 @@ app.get("/insights/total", async (req, res) => {
   }
 });
 
-/* ================================
-   📈 DAILY (REACH - últimos 30 dias)
-================================ */
 app.get("/insights/daily", async (req, res) => {
   try {
     const since = new Date();
@@ -163,14 +158,11 @@ app.get("/insights/daily", async (req, res) => {
   }
 });
 
-/* ================================
-   📊 TODAY (DADOS PARCIAIS DO DIA)
-================================ */
 app.get("/insights/today", async (req, res) => {
   try {
-    const today = new Date().toISOString().split("T")[0];
+    const today = todayBrasilia();
     const until = Math.floor(Date.now() / 1000);
-    const since = until - 86400; // últimas 24h
+    const since = until - 86400;
 
     const [reachRes, viewsRes, followersRes] = await Promise.allSettled([
       axios.get(`${BASE_URL}/${IG_ID}/insights?metric=reach&period=day&since=${since}&until=${until}&access_token=${TOKEN}`),
@@ -185,13 +177,10 @@ app.get("/insights/today", async (req, res) => {
     res.json({ date: today, reach, impressions, followers_count: followers, partial: true });
   } catch (error) {
     console.log("❌ TODAY ERROR:", error.response?.data || error.message);
-    res.json({ date: new Date().toISOString().split("T")[0], reach: 0, impressions: 0, followers_count: 0, partial: true });
+    res.json({ date: todayBrasilia(), reach: 0, impressions: 0, followers_count: 0, partial: true });
   }
 });
 
-/* ================================
-   📊 METRICS HISTORY
-================================ */
 app.get("/metrics/history", async (req, res) => {
   try {
     const result = await pool.query(`
@@ -205,9 +194,6 @@ app.get("/metrics/history", async (req, res) => {
   }
 });
 
-/* ================================
-   📸 MEDIA (POSTS)
-================================ */
 app.get("/media", async (req, res) => {
   try {
     const url = `${BASE_URL}/${IG_ID}/media?fields=id,caption,media_type,media_url,thumbnail_url,like_count,comments_count,timestamp&access_token=${TOKEN}`;
@@ -229,9 +215,6 @@ app.get("/media", async (req, res) => {
   }
 });
 
-/* ================================
-   📊 FOLLOWERS HISTORY
-================================ */
 app.get("/followers/history", async (req, res) => {
   try {
     const result = await pool.query(`
@@ -245,9 +228,6 @@ app.get("/followers/history", async (req, res) => {
   }
 });
 
-/* ================================
-   🧪 ROTAS DE TESTE
-================================ */
 app.get("/test/save-followers", async (req, res) => {
   await saveFollowersHistory();
   res.send("✅ Followers salvo!");
@@ -258,9 +238,6 @@ app.get("/test/save-metrics", async (req, res) => {
   res.send("✅ Métricas salvas!");
 });
 
-/* ================================
-   🚀 START SERVER
-================================ */
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, "0.0.0.0", async () => {
   console.log(`🚀 Backend rodando na porta ${PORT}`);
